@@ -14,40 +14,38 @@ def get_api_key() -> str:
 
 def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
     """odcloud API 공통 호출"""
-    url = f"{ODCLOUD_BASE}/{endpoint}"
-    params = {
-        "serviceKey": get_api_key(),
-        "page": page,
-        "perPage": page_size,
-    }
+    api_key = get_api_key()
+    url = f"{ODCLOUD_BASE}/{endpoint}?serviceKey={api_key}&page={page}&perPage={page_size}"
     try:
-        resp = requests.get(url, params=params, timeout=10)
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         return {"items": data.get("data", []), "total": data.get("totalCount", 0), "success": True}
     except Exception as e:
-        return {"items": [], "total": 0, "success": False, "error": str(e)}
+        return {"items": [], "total": 0, "success": False, "error": f"{type(e).__name__}: {e}"}
 
 
 PAPER_KEYWORDS = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조", "중견"]
 
-def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dict]:
-    """중소기업지원사업목록 조회"""
+def fetch_support_programs(keywords: list[str], page_size: int = 30) -> tuple[list[dict], str | None]:
+    """중소기업지원사업목록 조회. (data, error_msg) 반환"""
     results = []
     seen = set()
     kw_lower = [k.lower() for k in keywords]
 
     resp = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
-    if resp["success"]:
-        for item in resp["items"]:
-            n = normalize_item(item, source="지원사업")
-            text = " ".join(str(v) for v in item.values()).lower()
-            if not kw_lower or any(k in text for k in kw_lower):
-                if n["id"] not in seen:
-                    seen.add(n["id"])
-                    results.append(n)
+    if not resp["success"]:
+        return [], f"API 오류: {resp.get('error', '알 수 없는 오류')}"
 
-    return results
+    for item in resp["items"]:
+        n = normalize_item(item, source="지원사업")
+        text = " ".join(str(v) for v in item.values()).lower()
+        if not kw_lower or any(k in text for k in kw_lower):
+            if n["id"] not in seen:
+                seen.add(n["id"])
+                results.append(n)
+
+    return results, None
 
 
 def normalize_item(raw: dict, source: str = "") -> dict:

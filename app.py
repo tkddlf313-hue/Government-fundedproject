@@ -51,11 +51,9 @@ st.markdown("""
 
 # ── 데이터 로드 (세션 캐시) ──────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_programs(keywords: list[str]) -> tuple:
-    data = fetch_support_programs(list(keywords), page_size=50)
-    if data:
-        return data, None
-    return [], "공공데이터포털 API 조회에 실패했습니다. 잠시 후 새로고침 해주세요."
+def load_programs(keywords: tuple) -> tuple:
+    data, err = fetch_support_programs(list(keywords), page_size=50)
+    return data, err
 
 
 # ── 사이드바 ─────────────────────────────────────────────────
@@ -78,7 +76,8 @@ with st.sidebar:
     selected_kw = st.multiselect(
         "검색 키워드",
         options=KW_OPTIONS,
-        default=KW_OPTIONS,
+        default=[],
+        placeholder="키워드 없이 전체 조회",
     )
 
     st.subheader("📍 지역 필터")
