@@ -3,8 +3,10 @@ import streamlit as st
 from datetime import datetime
 
 ODCLOUD_BASE = "https://api.odcloud.kr/api"
-NAMESPACE_NEWS = "15122782/v1"       # 기업마당 정책뉴스
-NAMESPACE_BIZLIST = "3034791/v1"     # 중소기업지원사업목록
+# 중소기업지원사업목록 (2025년 최신)
+ENDPOINT_BIZLIST = "3034791/v1/uddi:fa09d13d-bce8-474e-b214-8008e79ec08f"
+# 기업마당 정책뉴스 (2025년 최신)
+ENDPOINT_NEWS = "15122782/v1/uddi:a9ebbee9-1ee4-4322-be4f-f19444835caa"
 
 KEYWORDS_PAPER = ["제지", "펄프", "종이", "제조", "스마트팩토리", "스마트공장", "중견기업"]
 
@@ -12,9 +14,9 @@ def get_api_key() -> str:
     return st.secrets.get("PUBLIC_DATA_API_KEY", "")
 
 
-def _fetch_odcloud(namespace: str, page: int = 1, page_size: int = 30) -> dict:
+def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
     """odcloud API 공통 호출"""
-    url = f"{ODCLOUD_BASE}/{namespace}"
+    url = f"{ODCLOUD_BASE}/{endpoint}"
     params = {
         "serviceKey": get_api_key(),
         "page": page,
@@ -30,16 +32,14 @@ def _fetch_odcloud(namespace: str, page: int = 1, page_size: int = 30) -> dict:
 
 
 def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dict]:
-    """지원사업목록 + 정책뉴스 통합 조회 후 키워드 필터링"""
+    """중소기업지원사업목록 + 정책뉴스 통합 조회 후 키워드 필터링"""
     all_items = []
 
-    # 중소기업지원사업목록 (메인)
-    resp1 = _fetch_odcloud(NAMESPACE_BIZLIST, page_size=page_size)
+    resp1 = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
     if resp1["success"]:
         all_items.extend(resp1["items"])
 
-    # 기업마당 정책뉴스 (보조)
-    resp2 = _fetch_odcloud(NAMESPACE_NEWS, page_size=page_size)
+    resp2 = _fetch_odcloud(ENDPOINT_NEWS, page_size=page_size)
     if resp2["success"]:
         all_items.extend(resp2["items"])
 
@@ -62,40 +62,40 @@ def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dic
 
 
 def normalize_item(raw: dict) -> dict:
-    """odcloud 응답 필드를 통일된 형식으로 변환"""
+    """odcloud 응답 필드를 통일된 형식으로 변환 (지원사업목록 + 정책뉴스 공용)"""
     title = (
-        raw.get("제목") or raw.get("title") or
-        raw.get("뉴스제목") or raw.get("정책명") or "제목 없음"
+        raw.get("사업명") or raw.get("제목") or
+        raw.get("뉴스제목") or "제목 없음"
     )
     agency = (
-        raw.get("기관명") or raw.get("출처") or
-        raw.get("담당기관") or "중소벤처기업부"
+        raw.get("소관기관") or raw.get("기관명") or
+        raw.get("출처") or "중소벤처기업부"
     )
-    description = (
-        raw.get("내용") or raw.get("요약") or
-        raw.get("본문") or raw.get("summary") or ""
+    start_date = (
+        raw.get("신청시작일자") or raw.get("시작일") or
+        raw.get("등록일") or ""
     )
-    date = (
-        raw.get("등록일") or raw.get("작성일") or
-        raw.get("게시일") or ""
+    end_date = (
+        raw.get("신청종료일자") or raw.get("종료일") or ""
     )
     url = (
-        raw.get("url") or raw.get("링크") or
+        raw.get("상세URL") or raw.get("url") or
         raw.get("원문링크") or ""
     )
-    category = raw.get("분류") or raw.get("카테고리") or "정책뉴스"
+    category = raw.get("분야") or raw.get("카테고리") or "기타"
+    description = raw.get("본문내용") or raw.get("내용") or raw.get("요약") or ""
 
     return {
-        "id": str(raw.get("번호") or raw.get("id") or title[:20]),
+        "id": str(raw.get("번호") or raw.get("연번") or title[:20]),
         "title": title,
         "agency": agency,
         "category": category,
-        "start_date": date,
-        "end_date": "",
+        "start_date": start_date.replace("-", "") if start_date else "",
+        "end_date": end_date.replace("-", "") if end_date else "",
         "amount": "",
-        "target": raw.get("지원대상") or "",
+        "target": raw.get("수행기관") or "",
         "detail_url": url,
-        "description": description[:200] if description else "",
+        "description": description[:200] if description else f"{agency} | {category}",
         "raw": raw,
     }
 
