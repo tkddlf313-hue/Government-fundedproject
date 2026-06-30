@@ -31,37 +31,38 @@ def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
         return {"items": [], "total": 0, "success": False, "error": str(e)}
 
 
+PAPER_KEYWORDS = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조", "중견"]
+
 def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dict]:
-    """중소기업지원사업목록 + 정책뉴스 통합 조회 후 키워드 필터링"""
-    all_items = []
+    """중소기업지원사업목록 + 정책뉴스 통합 조회"""
+    results = []
+    seen = set()
+    kw_lower = [k.lower() for k in keywords]
 
     resp1 = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
     if resp1["success"]:
-        all_items.extend(resp1["items"])
+        for item in resp1["items"]:
+            n = normalize_item(item, source="지원사업")
+            text = " ".join(str(v) for v in item.values()).lower()
+            if not kw_lower or any(k in text for k in kw_lower):
+                if n["id"] not in seen:
+                    seen.add(n["id"])
+                    results.append(n)
 
     resp2 = _fetch_odcloud(ENDPOINT_NEWS, page_size=page_size)
     if resp2["success"]:
-        all_items.extend(resp2["items"])
-
-    if not all_items:
-        return []
-
-    kw_lower = [k.lower() for k in keywords]
-    results = []
-    seen = set()
-
-    for item in all_items:
-        text = " ".join(str(v) for v in item.values()).lower()
-        if not kw_lower or any(k in text for k in kw_lower):
-            normalized = normalize_item(item)
-            if normalized["id"] not in seen:
-                seen.add(normalized["id"])
-                results.append(normalized)
+        for item in resp2["items"]:
+            n = normalize_item(item, source="정책뉴스")
+            text = " ".join(str(v) for v in item.values()).lower()
+            if not kw_lower or any(k in text for k in kw_lower):
+                if n["id"] not in seen:
+                    seen.add(n["id"])
+                    results.append(n)
 
     return results
 
 
-def normalize_item(raw: dict) -> dict:
+def normalize_item(raw: dict, source: str = "") -> dict:
     """odcloud 응답 필드를 통일된 형식으로 변환 (지원사업목록 + 정책뉴스 공용)"""
     title = (
         raw.get("사업명") or raw.get("제목") or
@@ -96,6 +97,7 @@ def normalize_item(raw: dict) -> dict:
         "target": raw.get("수행기관") or "",
         "detail_url": url,
         "description": description[:200] if description else f"{agency} | {category}",
+        "source": source,
         "raw": raw,
     }
 
@@ -126,6 +128,7 @@ def get_sample_data() -> list[dict]:
             "target": "중소·중견 제조기업",
             "detail_url": "https://www.smtech.go.kr",
             "description": "제조 현장의 스마트화를 위한 설비·솔루션 도입 지원. 제지·펄프 업종 포함.",
+            "source": "지원사업",
             "raw": {},
         },
         {

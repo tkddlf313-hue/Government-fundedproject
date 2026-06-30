@@ -73,11 +73,11 @@ with st.sidebar:
     st.divider()
 
     st.subheader("🔍 키워드 필터")
-    default_kw = ["스마트팩토리", "제조업", "중견기업", "에너지효율", "R&D"]
+    default_kw = ["스마트팩토리", "제지", "에너지", "환경", "중견기업"]
     selected_kw = st.multiselect(
         "검색 키워드",
         options=["스마트팩토리", "스마트공장", "제조업", "중견기업", "제지", "펄프",
-                 "에너지효율", "R&D", "설비투자", "환경", "디지털전환"],
+                 "에너지", "에너지효율", "R&D", "설비투자", "환경", "디지털전환"],
         default=default_kw,
     )
     use_sample = st.checkbox("샘플 데이터 사용 (API 미연결 시)", value=True)
@@ -137,33 +137,50 @@ if page == "🏠 대시보드":
 """, unsafe_allow_html=True)
         st.divider()
 
-    # 전체 목록
-    st.markdown('<div class="section-header">📋 전체 지원사업 목록</div>', unsafe_allow_html=True)
+    # 출처별 분리
+    biz_list = [p for p in programs if p.get("source") == "지원사업"]
+    news_list = [p for p in programs if p.get("source") == "정책뉴스"]
+    paper_kw = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경"]
+    paper_list = [p for p in programs if any(
+        k in (p["title"] + p["description"] + p["category"]).lower() for k in paper_kw
+    )]
 
-    # 분야 탭
-    all_cats = ["전체"] + sorted(set(p["category"] for p in programs if p["category"]))
-    tabs = st.tabs(all_cats)
+    tab1, tab2, tab3 = st.tabs([
+        f"📋 지원사업목록 ({len(biz_list)}건)",
+        f"📰 정책뉴스 ({len(news_list)}건)",
+        f"🏭 제지산업 연관 ({len(paper_list)}건)",
+    ])
 
-    for tab, cat in zip(tabs, all_cats):
-        with tab:
-            filtered = programs if cat == "전체" else [p for p in programs if p["category"] == cat]
-            if not filtered:
-                st.info("해당 분야의 사업이 없습니다.")
-                continue
-            for p in filtered:
-                urgent_cls = "urgent" if is_deadline_soon(p) else ""
-                with st.expander(f"{'🔴 ' if urgent_cls else ''}**{p['title']}** — {p['agency']}"):
-                    c1, c2 = st.columns([1, 1])
-                    with c1:
-                        st.write(f"**담당기관:** {p['agency']}")
-                        st.write(f"**분야:** {p['category'] or '미분류'}")
-                        st.write(f"**지원금액:** {p['amount'] or '공고 확인 필요'}")
-                    with c2:
+    def render_items(items):
+        if not items:
+            st.info("해당 항목이 없습니다.")
+            return
+        for p in items:
+            is_urgent = is_deadline_soon(p)
+            with st.expander(f"{'🔴 ' if is_urgent else ''}**{p['title']}** — {p['agency']}"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write(f"**담당기관:** {p['agency']}")
+                    st.write(f"**분야:** {p['category'] or '미분류'}")
+                    if p.get("amount"):
+                        st.write(f"**지원금액:** {p['amount']}")
+                with c2:
+                    if p.get("start_date") or p.get("end_date"):
                         st.write(f"**신청기간:** {p['start_date'] or '?'} ~ {p['end_date'] or '?'}")
-                        st.write(f"**지원대상:** {p['target'] or '공고 참조'}")
-                        if p.get("detail_url"):
-                            st.markdown(f"[🔗 공고 바로가기]({p['detail_url']})")
-                    st.write(f"**사업 내용:** {p['description'] or '상세 내용은 공고를 참조하세요.'}")
+                    if p.get("target"):
+                        st.write(f"**수행기관:** {p['target']}")
+                    if p.get("detail_url"):
+                        st.markdown(f"[🔗 공고 바로가기]({p['detail_url']})")
+                if p.get("description"):
+                    st.write(f"**내용:** {p['description']}")
+
+    with tab1:
+        render_items(biz_list)
+    with tab2:
+        render_items(news_list)
+    with tab3:
+        st.caption("스마트팩토리 · 에너지 · 환경 · 제지/펄프 키워드 포함 항목")
+        render_items(paper_list)
 
 
 # ============================================================
