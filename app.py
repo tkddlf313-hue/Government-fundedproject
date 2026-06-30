@@ -130,10 +130,33 @@ if page == "🏠 대시보드":
         text = (p["title"] + p["description"] + p["category"]).lower()
         return not any(k in text for k in EXCLUDE_KW)
 
+    # 지역 → 검색 키워드 매핑 (시 + 도 단위 모두 포함)
+    REGION_KEYWORDS = {
+        "천안": ["천안", "충남", "충청남도"],
+        "장항": ["장항", "서천", "충남", "충청남도"],
+        "대전": ["대전", "충청"],
+        "신탄진": ["신탄진", "대덕", "대전"],
+    }
+
     def apply_region(items: list, region: str) -> list:
         if region == "전체":
             return items
-        return [p for p in items if region in (p["title"] + p["description"] + p.get("target", ""))]
+        search_kw = REGION_KEYWORDS.get(region, [region])
+        result = []
+        for p in items:
+            raw = p.get("raw", {})
+            text = " ".join([
+                p["title"],
+                p["description"],
+                p.get("target", ""),
+                p["agency"],
+                raw.get("hashtags", ""),
+                raw.get("jrsdInsttNm", ""),
+                raw.get("excInsttNm", ""),
+            ])
+            if any(k in text for k in search_kw):
+                result.append(p)
+        return result
 
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
