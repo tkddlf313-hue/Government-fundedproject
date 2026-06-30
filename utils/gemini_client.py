@@ -2,7 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-2.5-flash"
 
 _clients: list = []
 _current_index: int = 0
