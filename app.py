@@ -28,8 +28,6 @@ st.markdown("""
 # ── 세션 초기화 ──────────────────────────────────────────────
 if "favorites" not in st.session_state:
     st.session_state.favorites = set()
-if "summaries" not in st.session_state:
-    st.session_state.summaries = {}
 
 # ── 데이터 로드 ──────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -185,29 +183,16 @@ def render_program_card(p, idx, show_fav=True):
         if p.get("description"):
             st.write(f"**내용:** {p['description']}")
 
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            if show_fav:
-                if st.button(f"{fav_icon} {'즐겨찾기 해제' if fav else '즐겨찾기 추가'}", key=f"fav_{idx}_{pid}"):
-                    if fav:
-                        st.session_state.favorites.discard(pid)
-                    else:
-                        st.session_state.favorites.add(pid)
-                        # 즐겨찾기 시 프로그램 전체 저장
-                        if "fav_data" not in st.session_state:
-                            st.session_state.fav_data = {}
-                        st.session_state.fav_data[pid] = p
-                    st.rerun()
-        with btn_col2:
-            if st.button("✨ AI 3줄 요약", key=f"sum_{idx}_{pid}"):
-                if pid not in st.session_state.summaries:
-                    with st.spinner("요약 중..."):
-                        from utils.gemini_client import summarize_program
-                        st.session_state.summaries[pid] = summarize_program(p)
+        if show_fav:
+            if st.button(f"{fav_icon} {'즐겨찾기 해제' if fav else '즐겨찾기 추가'}", key=f"fav_{idx}_{pid}"):
+                if fav:
+                    st.session_state.favorites.discard(pid)
+                else:
+                    st.session_state.favorites.add(pid)
+                    if "fav_data" not in st.session_state:
+                        st.session_state.fav_data = {}
+                    st.session_state.fav_data[pid] = p
                 st.rerun()
-
-        if pid in st.session_state.summaries:
-            st.info(f"**AI 요약**\n\n{st.session_state.summaries[pid]}")
 
 
 # ── 데이터 로드 ──────────────────────────────────────────────
