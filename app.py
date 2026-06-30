@@ -111,6 +111,21 @@ def is_expired(p):
     end = p.get("end_date", "")
     return bool(end) and end < today
 
+# 지자체 키워드 — 이게 포함된 기관은 "지역 공고"로 판단
+LOCAL_GOV_KW = ["시", "군", "구", "도청", "광역시", "특별시", "자치시",
+                "충남", "충북", "충청", "대전", "경기", "경북", "경남",
+                "전북", "전남", "강원", "제주", "인천", "부산", "대구",
+                "울산", "광주", "세종", "서울"]
+
+def is_national_agency(p) -> bool:
+    raw = p.get("raw", {})
+    agency_text = " ".join([
+        p["agency"],
+        raw.get("jrsdInsttNm", ""),
+        raw.get("excInsttNm", ""),
+    ])
+    return not any(k in agency_text for k in LOCAL_GOV_KW)
+
 def apply_region(items, region):
     if region == "전체":
         return items
@@ -118,9 +133,10 @@ def apply_region(items, region):
     result = []
     for p in items:
         raw = p.get("raw", {})
-        text = " ".join([p["title"], p["agency"],
-                         raw.get("jrsdInsttNm", ""), raw.get("excInsttNm", "")])
-        if any(k in text for k in search_kw):
+        agency_text = " ".join([p["title"], p["agency"],
+                                 raw.get("jrsdInsttNm", ""), raw.get("excInsttNm", "")])
+        is_local_match = any(k in agency_text for k in search_kw)
+        if is_local_match or is_national_agency(p):
             result.append(p)
     return result
 
