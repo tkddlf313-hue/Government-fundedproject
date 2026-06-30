@@ -138,13 +138,11 @@ if page == "🏠 대시보드":
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
 
-    def is_active(p: dict) -> bool:
+    def is_expired(p: dict) -> bool:
         end = p.get("end_date", "")
-        if not end:
-            return True  # 마감일 없으면 표시
-        return end >= today
+        return bool(end) and end < today
 
-    biz_all = [p for p in programs if is_paper_related(p) and is_active(p)]
+    biz_all = [p for p in programs if is_paper_related(p)]
     biz_filtered = apply_region(biz_all, selected_region)
 
     # 요약 지표
@@ -182,7 +180,9 @@ if page == "🏠 대시보드":
     else:
         for p in biz_filtered:
             is_urgent = is_deadline_soon(p)
-            with st.expander(f"{'🔴 ' if is_urgent else ''}**{p['title']}** — {p['agency']}"):
+            expired = is_expired(p)
+            prefix = "🔴 " if is_urgent else ("⚫ " if expired else "")
+            with st.expander(f"{prefix}**{p['title']}** — {p['agency']}"):
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write(f"**담당기관:** {p['agency']}")
@@ -190,6 +190,8 @@ if page == "🏠 대시보드":
                 with c2:
                     if p.get("start_date") or p.get("end_date"):
                         st.write(f"**신청기간:** {p['start_date'] or '?'} ~ {p['end_date'] or '?'}")
+                    if expired:
+                        st.caption("⚫ 마감된 공고입니다")
                     if p.get("detail_url"):
                         st.markdown(f"[🔗 공고 바로가기]({p['detail_url']})")
                 if p.get("description"):
