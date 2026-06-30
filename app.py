@@ -78,6 +78,7 @@ with st.sidebar:
         options=KW_OPTIONS,
         default=[],
         placeholder="키워드 없이 전체 조회",
+        accept_new_options=True,
     )
 
     st.subheader("📍 지역 필터")
