@@ -50,9 +50,9 @@ with st.sidebar:
     st.divider()
 
     st.subheader("🔍 키워드 필터")
-    KW_OPTIONS = ["스마트팩토리", "스마트공장", "제조업", "제조", "공장", "중견기업",
-                  "제지", "펄프", "에너지", "에너지효율", "R&D", "설비투자",
-                  "환경", "디지털전환", "로봇", "AX"]
+    KW_OPTIONS = ["스마트팩토리", "스마트공장", "제조", "공장", "중견기업",
+                  "에너지", "R&D", "설비", "투자", "환경",
+                  "로봇", "AX", "DX", "AI", "기술"]
     selected_kw = st.multiselect(
         "검색 키워드",
         options=KW_OPTIONS,
