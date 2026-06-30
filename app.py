@@ -111,11 +111,15 @@ def is_expired(p):
     end = p.get("end_date", "")
     return bool(end) and end < today
 
-# 지자체 키워드 — 이게 포함된 기관은 "지역 공고"로 판단
-LOCAL_GOV_KW = ["시", "군", "구", "도청", "광역시", "특별시", "자치시",
-                "충남", "충북", "충청", "대전", "경기", "경북", "경남",
-                "전북", "전남", "강원", "제주", "인천", "부산", "대구",
-                "울산", "광주", "세종", "서울"]
+# 지역명 — 하나라도 포함되면 지자체 공고로 판단
+ALL_REGION_KW = [
+    "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+    "경기", "강원", "충북", "충남", "충청", "전북", "전남", "경북", "경남", "제주",
+    "경상북도", "경상남도", "전라북도", "전라남도", "충청북도", "충청남도", "강원도",
+    "수원", "성남", "안양", "청주", "천안", "아산", "서천", "공주", "논산",
+    "전주", "광양", "포항", "구미", "창원", "진주", "제천", "춘천",
+    "도청", "시청", "군청", "구청", "광역시", "특별시",
+]
 
 def is_national_agency(p) -> bool:
     raw = p.get("raw", {})
@@ -124,7 +128,7 @@ def is_national_agency(p) -> bool:
         raw.get("jrsdInsttNm", ""),
         raw.get("excInsttNm", ""),
     ])
-    return not any(k in agency_text for k in LOCAL_GOV_KW)
+    return not any(k in agency_text for k in ALL_REGION_KW)
 
 def apply_region(items, region):
     if region == "전체":
