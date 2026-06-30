@@ -2,90 +2,87 @@ import requests
 import streamlit as st
 from datetime import datetime
 
-ODCLOUD_BASE = "https://api.odcloud.kr/api"
-# 중소기업지원사업목록 (2025년 최신)
-ENDPOINT_BIZLIST = "3034791/v1/uddi:fa09d13d-bce8-474e-b214-8008e79ec08f"
-
+BIZINFO_BASE = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do"
 KEYWORDS_PAPER = ["제지", "펄프", "종이", "제조", "스마트팩토리", "스마트공장", "중견기업"]
 
-def get_api_key() -> str:
-    return st.secrets.get("PUBLIC_DATA_API_KEY", "")
+
+def get_bizinfo_key() -> str:
+    return st.secrets.get("BIZINFO_API_KEY", "")
 
 
-def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
-    """odcloud API 공통 호출 — serviceKey를 URL에 직접 삽입 (requests params 인코딩 방지)"""
-    api_key = get_api_key()
-    url = f"{ODCLOUD_BASE}/{endpoint}?serviceKey={api_key}&page={page}&perPage={page_size}"
-    try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        return {"items": data.get("data", []), "total": data.get("totalCount", 0), "success": True}
-    except requests.exceptions.HTTPError as e:
-        return {"items": [], "total": 0, "success": False, "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
-    except Exception as e:
-        return {"items": [], "total": 0, "success": False, "error": f"{type(e).__name__}: {e}"}
+def fetch_support_programs(keywords: list[str], page_size: int = 100) -> tuple[list[dict], str | None]:
+    """기업마당 지원사업 조회. (data, error_msg) 반환"""
+    key = get_bizinfo_key()
+    if not key:
+        return [], "기업마당 API 키가 설정되지 않았습니다. Streamlit Secrets에 BIZINFO_API_KEY를 추가해주세요."
 
-
-PAPER_KEYWORDS = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조", "중견"]
-
-def fetch_support_programs(keywords: list[str], page_size: int = 30) -> tuple[list[dict], str | None]:
-    """중소기업지원사업목록 조회. (data, error_msg) 반환"""
     results = []
     seen = set()
-    kw_lower = [k.lower() for k in keywords]
 
-    resp = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
-    if not resp["success"]:
-        return [], f"API 오류: {resp.get('error', '알 수 없는 오류')}"
+    # 키워드가 있으면 키워드별로 검색, 없으면 전체 조회
+    search_terms = keywords if keywords else [""]
 
-    for item in resp["items"]:
-        n = normalize_item(item, source="지원사업")
-        text = " ".join(str(v) for v in item.values()).lower()
-        if not kw_lower or any(k in text for k in kw_lower):
-            if n["id"] not in seen:
-                seen.add(n["id"])
-                results.append(n)
+    for kw in search_terms:
+        params = {
+            "crtfcKey": key,
+            "dataType": "json",
+            "pageUnit": page_size,
+            "pageIndex": 1,
+        }
+        if kw:
+            params["검색어"] = kw
+
+        try:
+            resp = requests.get(BIZINFO_BASE, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("jsonArray", [])
+            for item in items:
+                pid = item.get("pblancId", item.get("pblancNm", "")[:20])
+                if pid not in seen:
+                    seen.add(pid)
+                    results.append(normalize_bizinfo(item))
+        except requests.exceptions.HTTPError as e:
+            return [], f"API 오류: HTTP {resp.status_code}"
+        except Exception as e:
+            return [], f"API 오류: {type(e).__name__}: {e}"
 
     return results, None
 
 
-def normalize_item(raw: dict, source: str = "") -> dict:
-    """odcloud 응답 필드를 통일된 형식으로 변환 (지원사업목록 + 정책뉴스 공용)"""
-    title = (
-        raw.get("사업명") or raw.get("제목") or
-        raw.get("뉴스제목") or "제목 없음"
-    )
-    agency = (
-        raw.get("소관기관") or raw.get("기관명") or
-        raw.get("출처") or "중소벤처기업부"
-    )
-    start_date = (
-        raw.get("신청시작일자") or raw.get("시작일") or
-        raw.get("등록일") or ""
-    )
-    end_date = (
-        raw.get("신청종료일자") or raw.get("종료일") or ""
-    )
-    url = (
-        raw.get("상세URL") or raw.get("url") or
-        raw.get("원문링크") or ""
-    )
-    category = raw.get("분야") or raw.get("카테고리") or "기타"
-    description = raw.get("본문내용") or raw.get("내용") or raw.get("요약") or ""
+def normalize_bizinfo(raw: dict) -> dict:
+    """기업마당 API 응답을 통일된 형식으로 변환"""
+    title = raw.get("pblancNm") or "제목 없음"
+    agency = raw.get("jrsdInsttNm") or raw.get("excInsttNm") or "기업마당"
+    category = raw.get("pldirSportRealmLclasCodeNm") or "기타"
+    target = raw.get("trgetNm") or ""
+    description = raw.get("bsnsSumryCn") or raw.get("hashtags") or ""
+    detail_url = raw.get("pblancUrl") or ""
+
+    # 신청기간: "2026-06-26 ~ 2026-07-16" 형식
+    period = raw.get("reqstBeginEndDe") or ""
+    start_date, end_date = "", ""
+    if "~" in period:
+        parts = period.split("~")
+        start_date = parts[0].strip()[:10].replace("-", "")
+        end_date = parts[1].strip()[:10].replace("-", "")
+
+    # HTML 태그 제거
+    import re
+    description = re.sub(r"<[^>]+>", "", description)[:200]
 
     return {
-        "id": str(raw.get("번호") or raw.get("연번") or title[:20]),
+        "id": raw.get("pblancId", title[:20]),
         "title": title,
         "agency": agency,
         "category": category,
-        "start_date": start_date.replace("-", "") if start_date else "",
-        "end_date": end_date.replace("-", "") if end_date else "",
+        "start_date": start_date,
+        "end_date": end_date,
         "amount": "",
-        "target": raw.get("수행기관") or "",
-        "detail_url": url,
-        "description": description[:200] if description else f"{agency} | {category}",
-        "source": source,
+        "target": target,
+        "detail_url": detail_url,
+        "description": description,
+        "source": "지원사업",
         "raw": raw,
     }
 
@@ -103,72 +100,4 @@ def is_deadline_soon(item: dict, days: int = 7) -> bool:
 
 
 def get_sample_data() -> list[dict]:
-    """API 연결 전 테스트용 샘플 데이터"""
-    return [
-        {
-            "id": "S001",
-            "title": "스마트공장 보급·확산 사업",
-            "agency": "중소벤처기업부",
-            "category": "스마트제조",
-            "start_date": "20260601",
-            "end_date": "20260731",
-            "amount": "최대 1억원",
-            "target": "중소·중견 제조기업",
-            "detail_url": "https://www.smtech.go.kr",
-            "description": "제조 현장의 스마트화를 위한 설비·솔루션 도입 지원. 제지·펄프 업종 포함.",
-            "source": "지원사업",
-            "raw": {},
-        },
-        {
-            "id": "S002",
-            "title": "중견기업 글로벌 경쟁력 강화 R&D 지원",
-            "agency": "산업통상자원부",
-            "category": "R&D",
-            "start_date": "20260615",
-            "end_date": "20260808",
-            "amount": "최대 5억원",
-            "target": "중견기업",
-            "detail_url": "https://www.keit.re.kr",
-            "description": "중견기업의 핵심기술 개발 및 글로벌 시장 진출 R&D 지원.",
-            "raw": {},
-        },
-        {
-            "id": "S003",
-            "title": "제조업 에너지효율화 설비투자 지원",
-            "agency": "한국에너지공단",
-            "category": "에너지",
-            "start_date": "20260520",
-            "end_date": "20260720",
-            "amount": "최대 3억원",
-            "target": "제조업 전 업종",
-            "detail_url": "https://www.kemco.or.kr",
-            "description": "에너지 다소비 제조업체 대상 고효율 설비 교체 및 공정 개선 자금 지원.",
-            "raw": {},
-        },
-        {
-            "id": "S004",
-            "title": "산업단지 스마트화 지원사업",
-            "agency": "한국산업단지공단",
-            "category": "스마트제조",
-            "start_date": "20260701",
-            "end_date": "20260930",
-            "amount": "최대 2억원",
-            "target": "산업단지 입주 제조기업",
-            "detail_url": "https://www.kicox.or.kr",
-            "description": "산업단지 내 스마트팩토리 구축 및 디지털 전환 지원.",
-            "raw": {},
-        },
-        {
-            "id": "S005",
-            "title": "중소·중견기업 환경설비 지원",
-            "agency": "환경부",
-            "category": "환경",
-            "start_date": "20260601",
-            "end_date": "20261031",
-            "amount": "최대 2억원",
-            "target": "중소·중견 제조기업",
-            "detail_url": "https://www.me.go.kr",
-            "description": "폐수·대기오염 저감 설비 도입 지원. 제지업 환경 규제 대응에 활용 가능.",
-            "raw": {},
-        },
-    ]
+    return []

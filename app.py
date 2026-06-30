@@ -91,10 +91,10 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    pub_ok = bool(st.secrets.get("PUBLIC_DATA_API_KEY"))
+    biz_ok = bool(st.secrets.get("BIZINFO_API_KEY"))
     gem_ok = bool(st.secrets.get("GEMINI_API_KEY"))
     st.markdown(
-        f"공공데이터: {'🟢 연결됨' if pub_ok else '🔴 미설정'}  \n"
+        f"기업마당: {'🟢 연결됨' if biz_ok else '🔴 미설정'}  \n"
         f"Gemini: {'🟢 연결됨' if gem_ok else '🔴 미설정'}"
     )
 
