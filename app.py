@@ -73,12 +73,12 @@ with st.sidebar:
     st.divider()
 
     st.subheader("🔍 키워드 필터")
-    default_kw = ["스마트팩토리", "제지", "에너지", "환경", "중견기업"]
+    KW_OPTIONS = ["스마트팩토리", "스마트공장", "제조업", "중견기업", "제지", "펄프",
+                  "에너지", "에너지효율", "R&D", "설비투자", "환경", "디지털전환"]
     selected_kw = st.multiselect(
         "검색 키워드",
-        options=["스마트팩토리", "스마트공장", "제조업", "중견기업", "제지", "펄프",
-                 "에너지", "에너지효율", "R&D", "설비투자", "환경", "디지털전환"],
-        default=default_kw,
+        options=KW_OPTIONS,
+        default=KW_OPTIONS,
     )
 
     st.subheader("📍 지역 필터")
