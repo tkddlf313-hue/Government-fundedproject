@@ -62,6 +62,20 @@ def _call_with_retry(fn, max_retries: int = None):
     return None, f"❌ Gemini 호출 오류: {last_err}"
 
 
+def summarize_program(program: dict) -> str:
+    prompt = (
+        f"다음 정부지원사업을 제지·제조업 담당자 관점에서 3줄로 요약해줘.\n"
+        f"사업명: {program['title']}\n기관: {program['agency']}\n"
+        f"분야: {program['category']}\n기간: {program.get('start_date','')} ~ {program.get('end_date','')}\n"
+        f"내용: {program.get('description','')}\n\n"
+        f"형식 — 1. 지원내용 2. 신청대상 3. 핵심포인트 (각 줄 30자 이내, 한국어)"
+    )
+    result, err = _call_with_retry(
+        lambda c: c.models.generate_content(model=MODEL, contents=prompt).text
+    )
+    return result if result else err
+
+
 def recommend_programs(company_profile: dict, programs: list[dict]) -> str:
     programs_text = "\n".join([
         f"[{i+1}] {p['title']}|{p['agency']}|{p['category']}|{p['amount']}|{p['description'][:50]}"
