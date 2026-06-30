@@ -10,42 +10,49 @@ def get_bizinfo_key() -> str:
     return st.secrets.get("BIZINFO_API_KEY", "")
 
 
-def fetch_support_programs(keywords: list[str], page_size: int = 100) -> tuple[list[dict], str | None]:
-    """기업마당 지원사업 조회. (data, error_msg) 반환"""
+def fetch_support_programs(keywords: list[str], page_size: int = 500) -> tuple[list[dict], str | None]:
+    """기업마당 지원사업 전체 조회 후 Python에서 키워드 필터링. (data, error_msg) 반환"""
     key = get_bizinfo_key()
     if not key:
         return [], "기업마당 API 키가 설정되지 않았습니다. Streamlit Secrets에 BIZINFO_API_KEY를 추가해주세요."
 
+    params = {
+        "crtfcKey": key,
+        "dataType": "json",
+        "pageUnit": page_size,
+        "pageIndex": 1,
+    }
+
+    try:
+        resp = requests.get(BIZINFO_BASE, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("jsonArray", [])
+    except requests.exceptions.HTTPError:
+        return [], f"API 오류: HTTP {resp.status_code}"
+    except Exception as e:
+        return [], f"API 오류: {type(e).__name__}: {e}"
+
+    # Python에서 키워드 필터링 (제목 + hashtags + 대상)
+    kw_lower = [k.lower() for k in keywords]
     results = []
     seen = set()
-
-    # 키워드가 있으면 키워드별로 검색, 없으면 전체 조회
-    search_terms = keywords if keywords else [""]
-
-    for kw in search_terms:
-        params = {
-            "crtfcKey": key,
-            "dataType": "json",
-            "pageUnit": page_size,
-            "pageIndex": 1,
-        }
-        if kw:
-            params["검색어"] = kw
-
-        try:
-            resp = requests.get(BIZINFO_BASE, params=params, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("jsonArray", [])
-            for item in items:
-                pid = item.get("pblancId", item.get("pblancNm", "")[:20])
-                if pid not in seen:
-                    seen.add(pid)
-                    results.append(normalize_bizinfo(item))
-        except requests.exceptions.HTTPError as e:
-            return [], f"API 오류: HTTP {resp.status_code}"
-        except Exception as e:
-            return [], f"API 오류: {type(e).__name__}: {e}"
+    for item in items:
+        pid = item.get("pblancId", item.get("pblancNm", "")[:20])
+        if pid in seen:
+            continue
+        seen.add(pid)
+        if kw_lower:
+            text = " ".join([
+                item.get("pblancNm", ""),
+                item.get("hashtags", ""),
+                item.get("trgetNm", ""),
+                item.get("pldirSportRealmLclasCodeNm", ""),
+                item.get("bsnsSumryCn", ""),
+            ]).lower()
+            if not any(k in text for k in kw_lower):
+                continue
+        results.append(normalize_bizinfo(item))
 
     return results, None
 
