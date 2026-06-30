@@ -144,59 +144,54 @@ if page == "🏠 대시보드":
 """, unsafe_allow_html=True)
         st.divider()
 
-    # 제지산업 키워드 필터
-    PAPER_KW = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조"]
+    # 제지산업 관련 포함 키워드 (하나라도 있으면 OK)
+    INCLUDE_KW = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장",
+                  "에너지효율", "에너지절감", "신재생에너지", "환경설비",
+                  "탄소중립", "온실가스", "폐수", "대기오염",
+                  "제조업", "중견기업", "스마트제조", "디지털전환", "설비투자"]
+
+    # 무관 업종 제외 키워드 (하나라도 있으면 제외)
+    EXCLUDE_KW = ["농어업", "농업", "어업", "수산", "건설업", "건설사",
+                  "농어업인", "농업인", "어업인", "축산", "임업",
+                  "부동산", "의료", "관광", "문화", "예술", "교육기관",
+                  "소상공인", "자영업", "청년창업"]
 
     def is_paper_related(p: dict) -> bool:
         text = (p["title"] + p["description"] + p["category"]).lower()
-        return any(k in text for k in PAPER_KW)
+        if any(k in text for k in EXCLUDE_KW):
+            return False
+        return any(k in text for k in INCLUDE_KW)
 
     def apply_region(items: list, region: str) -> list:
         if region == "전체":
             return items
         return [p for p in items if region in (p["title"] + p["description"] + p.get("target", ""))]
 
-    biz_all  = [p for p in programs if p.get("source") == "지원사업" and is_paper_related(p)]
-    news_all = [p for p in programs if p.get("source") == "정책뉴스"  and is_paper_related(p)]
-
-    biz_filtered  = apply_region(biz_all,  selected_region)
-    news_filtered = apply_region(news_all, selected_region)
+    biz_all = [p for p in programs if is_paper_related(p)]
+    biz_filtered = apply_region(biz_all, selected_region)
 
     if selected_region != "전체":
-        st.info(f"📍 지역 필터 적용 중: **{selected_region}** — 제목·내용에 지역명 포함된 항목만 표시")
+        st.info(f"📍 지역 필터: **{selected_region}** — 제목·내용에 지역명 포함된 항목만 표시")
 
-    tab1, tab2 = st.tabs([
-        f"📋 지원사업목록 ({len(biz_filtered)}건)",
-        f"📰 정책뉴스 ({len(news_filtered)}건)",
-    ])
+    st.markdown(f'<div class="section-header">📋 지원사업목록 ({len(biz_filtered)}건)</div>', unsafe_allow_html=True)
 
-    def render_items(items):
-        if not items:
-            st.info("해당 항목이 없습니다.")
-            return
-        for p in items:
+    if not biz_filtered:
+        st.info("해당 조건의 지원사업이 없습니다.")
+    else:
+        for p in biz_filtered:
             is_urgent = is_deadline_soon(p)
             with st.expander(f"{'🔴 ' if is_urgent else ''}**{p['title']}** — {p['agency']}"):
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write(f"**담당기관:** {p['agency']}")
                     st.write(f"**분야:** {p['category'] or '미분류'}")
-                    if p.get("amount"):
-                        st.write(f"**지원금액:** {p['amount']}")
                 with c2:
                     if p.get("start_date") or p.get("end_date"):
                         st.write(f"**신청기간:** {p['start_date'] or '?'} ~ {p['end_date'] or '?'}")
-                    if p.get("target"):
-                        st.write(f"**수행기관:** {p['target']}")
                     if p.get("detail_url"):
                         st.markdown(f"[🔗 공고 바로가기]({p['detail_url']})")
                 if p.get("description"):
                     st.write(f"**내용:** {p['description']}")
-
-    with tab1:
-        render_items(biz_filtered)
-    with tab2:
-        render_items(news_filtered)
 
 
 # ============================================================

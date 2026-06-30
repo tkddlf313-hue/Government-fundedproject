@@ -5,8 +5,6 @@ from datetime import datetime
 ODCLOUD_BASE = "https://api.odcloud.kr/api"
 # 중소기업지원사업목록 (2025년 최신)
 ENDPOINT_BIZLIST = "3034791/v1/uddi:fa09d13d-bce8-474e-b214-8008e79ec08f"
-# 기업마당 정책뉴스 (2025년 최신)
-ENDPOINT_NEWS = "15122782/v1/uddi:a9ebbee9-1ee4-4322-be4f-f19444835caa"
 
 KEYWORDS_PAPER = ["제지", "펄프", "종이", "제조", "스마트팩토리", "스마트공장", "중견기업"]
 
@@ -34,25 +32,15 @@ def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
 PAPER_KEYWORDS = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조", "중견"]
 
 def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dict]:
-    """중소기업지원사업목록 + 정책뉴스 통합 조회"""
+    """중소기업지원사업목록 조회"""
     results = []
     seen = set()
     kw_lower = [k.lower() for k in keywords]
 
-    resp1 = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
-    if resp1["success"]:
-        for item in resp1["items"]:
+    resp = _fetch_odcloud(ENDPOINT_BIZLIST, page_size=page_size)
+    if resp["success"]:
+        for item in resp["items"]:
             n = normalize_item(item, source="지원사업")
-            text = " ".join(str(v) for v in item.values()).lower()
-            if not kw_lower or any(k in text for k in kw_lower):
-                if n["id"] not in seen:
-                    seen.add(n["id"])
-                    results.append(n)
-
-    resp2 = _fetch_odcloud(ENDPOINT_NEWS, page_size=page_size)
-    if resp2["success"]:
-        for item in resp2["items"]:
-            n = normalize_item(item, source="정책뉴스")
             text = " ".join(str(v) for v in item.values()).lower()
             if not kw_lower or any(k in text for k in kw_lower):
                 if n["id"] not in seen:
