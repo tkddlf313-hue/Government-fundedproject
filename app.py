@@ -52,7 +52,7 @@ st.markdown("""
 # ── 데이터 로드 (세션 캐시) ──────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_programs(keywords: tuple) -> tuple:
-    data, err = fetch_support_programs(list(keywords), page_size=30)
+    data, err = fetch_support_programs(list(keywords), page_size=100)
     return data, err
 
 
@@ -128,9 +128,7 @@ if page == "🏠 대시보드":
 
     def is_paper_related(p: dict) -> bool:
         text = (p["title"] + p["description"] + p["category"]).lower()
-        if any(k in text for k in EXCLUDE_KW):
-            return False
-        return any(k in text for k in INCLUDE_KW)
+        return not any(k in text for k in EXCLUDE_KW)
 
     def apply_region(items: list, region: str) -> list:
         if region == "전체":
