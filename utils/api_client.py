@@ -34,7 +34,8 @@ def fetch_support_programs(keywords: list[str], page_size: int = 500) -> tuple[l
         return [], f"API 오류: {type(e).__name__}: {e}"
 
     # Python에서 키워드 필터링 (제목 + hashtags + 대상)
-    kw_lower = [k.lower() for k in keywords]
+    # 대소문자 모두 커버 (AX → ax, R&D → r&d)
+    kw_lower = list({k.lower() for k in keywords} | {k for k in keywords})
     results = []
     seen = set()
     for item in items:
