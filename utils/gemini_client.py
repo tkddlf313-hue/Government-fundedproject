@@ -99,8 +99,8 @@ def recommend_programs(company_profile: dict, programs: list[dict]) -> str:
 
 def chat_with_gemini(history: list[dict], user_message: str, programs: list[dict]) -> str:
     programs_context = "\n".join([
-        f"- {p['title']} ({p['agency']}, {p['category']}, 마감: {p['end_date'] or '미정'})"
-        for p in programs[:8]  # 최대 8개만 전송
+        f"- {p['title']} ({p['agency']}, {p['category']}, 마감: {p['end_date'] or '미정'}, 대상: {p.get('target','')}, 내용: {p.get('description','')[:100]})"
+        for p in programs[:8]
     ])
 
     system_instruction = (
