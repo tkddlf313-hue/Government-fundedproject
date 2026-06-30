@@ -13,14 +13,16 @@ def get_api_key() -> str:
 
 
 def _fetch_odcloud(endpoint: str, page: int = 1, page_size: int = 30) -> dict:
-    """odcloud API 공통 호출"""
+    """odcloud API 공통 호출 — serviceKey를 URL에 직접 삽입 (requests params 인코딩 방지)"""
     api_key = get_api_key()
     url = f"{ODCLOUD_BASE}/{endpoint}?serviceKey={api_key}&page={page}&perPage={page_size}"
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         return {"items": data.get("data", []), "total": data.get("totalCount", 0), "success": True}
+    except requests.exceptions.HTTPError as e:
+        return {"items": [], "total": 0, "success": False, "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
     except Exception as e:
         return {"items": [], "total": 0, "success": False, "error": f"{type(e).__name__}: {e}"}
 

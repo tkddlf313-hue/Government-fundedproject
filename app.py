@@ -52,7 +52,7 @@ st.markdown("""
 # ── 데이터 로드 (세션 캐시) ──────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_programs(keywords: tuple) -> tuple:
-    data, err = fetch_support_programs(list(keywords), page_size=50)
+    data, err = fetch_support_programs(list(keywords), page_size=30)
     return data, err
 
 
