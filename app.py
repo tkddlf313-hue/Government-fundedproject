@@ -216,8 +216,12 @@ def render_program_card(p, idx, show_fav=True):
                 st.rerun()
 
 
-# ── 데이터 로드 ──────────────────────────────────────────────
+# ── 데이터 로드 + 공통 필터 ──────────────────────────────────
 programs, api_error = load_programs(tuple(selected_kw))
+
+biz_all = [p for p in programs if is_paper_related(p)]
+biz_region = apply_region(biz_all, selected_region)
+biz_filtered = sort_programs(biz_region, sort_option)
 
 
 # ============================================================
@@ -228,10 +232,6 @@ if page == "🏠 대시보드":
 
     if api_error:
         st.error(api_error)
-
-    biz_all = [p for p in programs if is_paper_related(p)]
-    biz_region = apply_region(biz_all, selected_region)
-    biz_filtered = sort_programs(biz_region, sort_option)
 
     # 요약 지표
     col1, col2, col3, col4 = st.columns(4)
@@ -357,21 +357,50 @@ elif page == "💬 AI 챗봇":
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
+    st.caption(f"현재 조회된 공고 **{len(biz_filtered)}건** 기준으로 답변합니다. (키워드: {', '.join(selected_kw) if selected_kw else '전체'} / 지역: {selected_region})")
+
+    # 키워드별 빠른 질문 매핑
+    KW_QUESTIONS = {
+        "AI":    "AI 관련 지원사업 뭐가 있어?",
+        "로봇":  "로봇 도입 지원사업 알려줘",
+        "DX":    "DX(디지털전환) 지원사업 있어?",
+        "AX":    "AX 관련 지원사업 뭐가 있어?",
+        "스마트": "스마트공장 구축 지원사업 알려줘",
+        "팩토리": "스마트팩토리 관련 사업 뭐가 있어?",
+        "제조":  "제조업 지원사업 어떤 게 있어?",
+        "공장":  "공장 자동화 관련 지원 있어?",
+        "중견":  "중견기업 신청 가능한 사업은?",
+        "에너지": "에너지 절감 지원사업 조건이 어떻게 돼?",
+        "환경":  "환경 규제 대응 지원사업 있어?",
+        "R&D":   "R&D 자금 지원 어디서 신청해?",
+        "설비":  "설비 도입 지원사업 알려줘",
+        "투자":  "투자 관련 정부 지원 뭐가 있어?",
+        "기술":  "기술개발 지원사업 추천해줘",
+    }
+    DEFAULT_QUESTIONS = [
+        "현재 조회된 사업 중 추천해줘",
+        "마감 임박한 사업이 있어?",
+        "신청 절차를 간단히 알려줘",
+        "지원 금액이 큰 사업은?",
+        "중견기업이 신청 가능한 사업은?",
+        "스마트공장 관련 지원사업 있어?",
+    ]
+
+    # 선택된 키워드 기반으로 질문 생성 (최대 6개)
+    if selected_kw:
+        quick_questions = [KW_QUESTIONS[k] for k in selected_kw if k in KW_QUESTIONS][:6]
+        if len(quick_questions) < 6:
+            quick_questions += DEFAULT_QUESTIONS[:6 - len(quick_questions)]
+    else:
+        quick_questions = DEFAULT_QUESTIONS
+
     st.subheader("💡 빠른 질문")
     q_cols = st.columns(3)
-    quick_questions = [
-        "제지공장에 맞는 스마트팩토리 지원사업이 있나요?",
-        "중견기업이 신청 가능한 사업은 무엇인가요?",
-        "에너지 절감 관련 지원을 받을 수 있나요?",
-        "R&D 자금 지원 조건이 어떻게 되나요?",
-        "마감이 임박한 사업이 있나요?",
-        "신청 절차를 간단히 설명해주세요.",
-    ]
     for i, q in enumerate(quick_questions):
         if q_cols[i % 3].button(q, key=f"quick_{i}", use_container_width=True):
             st.session_state.chat_history.append({"role": "user", "content": q})
             with st.spinner("답변 생성 중..."):
-                answer = chat_with_gemini(st.session_state.chat_history, q, programs)
+                answer = chat_with_gemini(st.session_state.chat_history, q, biz_filtered)
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
             st.rerun()
 
@@ -389,7 +418,7 @@ elif page == "💬 AI 챗봇":
             st.markdown(user_input)
         with st.chat_message("assistant"):
             with st.spinner("답변 생성 중..."):
-                answer = chat_with_gemini(st.session_state.chat_history[:-1], user_input, programs)
+                answer = chat_with_gemini(st.session_state.chat_history[:-1], user_input, biz_filtered)
             st.markdown(answer)
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
