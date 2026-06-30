@@ -80,6 +80,13 @@ with st.sidebar:
                  "에너지", "에너지효율", "R&D", "설비투자", "환경", "디지털전환"],
         default=default_kw,
     )
+
+    st.subheader("📍 지역 필터")
+    selected_region = st.selectbox(
+        "공장 소재지",
+        options=["전체", "신탄진", "장항", "천안", "대전"],
+    )
+
     use_sample = st.checkbox("샘플 데이터 사용 (API 미연결 시)", value=True)
 
     if st.button("🔄 데이터 새로고침", use_container_width=True):
@@ -137,18 +144,30 @@ if page == "🏠 대시보드":
 """, unsafe_allow_html=True)
         st.divider()
 
-    # 출처별 분리
-    biz_list = [p for p in programs if p.get("source") == "지원사업"]
-    news_list = [p for p in programs if p.get("source") == "정책뉴스"]
-    paper_kw = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경"]
-    paper_list = [p for p in programs if any(
-        k in (p["title"] + p["description"] + p["category"]).lower() for k in paper_kw
-    )]
+    # 제지산업 키워드 필터
+    PAPER_KW = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장", "에너지", "환경", "제조"]
 
-    tab1, tab2, tab3 = st.tabs([
-        f"📋 지원사업목록 ({len(biz_list)}건)",
-        f"📰 정책뉴스 ({len(news_list)}건)",
-        f"🏭 제지산업 연관 ({len(paper_list)}건)",
+    def is_paper_related(p: dict) -> bool:
+        text = (p["title"] + p["description"] + p["category"]).lower()
+        return any(k in text for k in PAPER_KW)
+
+    def apply_region(items: list, region: str) -> list:
+        if region == "전체":
+            return items
+        return [p for p in items if region in (p["title"] + p["description"] + p.get("target", ""))]
+
+    biz_all  = [p for p in programs if p.get("source") == "지원사업" and is_paper_related(p)]
+    news_all = [p for p in programs if p.get("source") == "정책뉴스"  and is_paper_related(p)]
+
+    biz_filtered  = apply_region(biz_all,  selected_region)
+    news_filtered = apply_region(news_all, selected_region)
+
+    if selected_region != "전체":
+        st.info(f"📍 지역 필터 적용 중: **{selected_region}** — 제목·내용에 지역명 포함된 항목만 표시")
+
+    tab1, tab2 = st.tabs([
+        f"📋 지원사업목록 ({len(biz_filtered)}건)",
+        f"📰 정책뉴스 ({len(news_filtered)}건)",
     ])
 
     def render_items(items):
@@ -175,12 +194,9 @@ if page == "🏠 대시보드":
                     st.write(f"**내용:** {p['description']}")
 
     with tab1:
-        render_items(biz_list)
+        render_items(biz_filtered)
     with tab2:
-        render_items(news_list)
-    with tab3:
-        st.caption("스마트팩토리 · 에너지 · 환경 · 제지/펄프 키워드 포함 항목")
-        render_items(paper_list)
+        render_items(news_filtered)
 
 
 # ============================================================
