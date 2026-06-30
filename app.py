@@ -145,14 +145,12 @@ if page == "🏠 대시보드":
         result = []
         for p in items:
             raw = p.get("raw", {})
+            # hashtags 제외 — 전국 공고도 모든 지역을 hashtags에 나열하므로 오탐 발생
             text = " ".join([
                 p["title"],
-                p["description"],
-                p.get("target", ""),
                 p["agency"],
-                raw.get("hashtags", ""),
-                raw.get("jrsdInsttNm", ""),
-                raw.get("excInsttNm", ""),
+                raw.get("jrsdInsttNm", ""),   # 주관기관
+                raw.get("excInsttNm", ""),     # 집행기관
             ])
             if any(k in text for k in search_kw):
                 result.append(p)
