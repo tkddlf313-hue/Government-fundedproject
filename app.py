@@ -135,7 +135,16 @@ if page == "🏠 대시보드":
             return items
         return [p for p in items if region in (p["title"] + p["description"] + p.get("target", ""))]
 
-    biz_all = [p for p in programs if is_paper_related(p)]
+    from datetime import datetime
+    today = datetime.now().strftime("%Y%m%d")
+
+    def is_active(p: dict) -> bool:
+        end = p.get("end_date", "")
+        if not end:
+            return True  # 마감일 없으면 표시
+        return end >= today
+
+    biz_all = [p for p in programs if is_paper_related(p) and is_active(p)]
     biz_filtered = apply_region(biz_all, selected_region)
 
     # 요약 지표
