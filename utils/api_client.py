@@ -2,79 +2,100 @@ import requests
 import streamlit as st
 from datetime import datetime
 
-BASE_URL = "https://apis.data.go.kr"
+ODCLOUD_BASE = "https://api.odcloud.kr/api"
+NAMESPACE_NEWS = "15122782/v1"       # 기업마당 정책뉴스
+NAMESPACE_BIZLIST = "3034791/v1"     # 중소기업지원사업목록
 
-KEYWORDS_PAPER = ["제지", "펄프", "종이", "paper", "제조", "스마트팩토리", "스마트공장"]
+KEYWORDS_PAPER = ["제지", "펄프", "종이", "제조", "스마트팩토리", "스마트공장", "중견기업"]
 
 def get_api_key() -> str:
     return st.secrets.get("PUBLIC_DATA_API_KEY", "")
 
 
-def fetch_bizinfo_list(keyword: str = "", page: int = 1, page_size: int = 20) -> dict:
-    """
-    기업마당 지원사업 공고 API (중소기업기술정보진흥원)
-    endpoint: /B552735/kisedBizInfo/getBizInfo
-    """
-    url = f"{BASE_URL}/B552735/kisedBizInfo/getBizInfo"
+def _fetch_odcloud(namespace: str, page: int = 1, page_size: int = 30) -> dict:
+    """odcloud API 공통 호출"""
+    url = f"{ODCLOUD_BASE}/{namespace}"
     params = {
         "serviceKey": get_api_key(),
-        "pageNo": page,
-        "numOfRows": page_size,
-        "returnType": "json",
-        "srchTxt": keyword,
+        "page": page,
+        "perPage": page_size,
     }
     try:
         resp = requests.get(url, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        items = (
-            data.get("response", {})
-                .get("body", {})
-                .get("items", {})
-                .get("item", [])
-        )
-        total = (
-            data.get("response", {})
-                .get("body", {})
-                .get("totalCount", 0)
-        )
-        if isinstance(items, dict):
-            items = [items]
-        return {"items": items, "total": total, "success": True}
+        return {"items": data.get("data", []), "total": data.get("totalCount", 0), "success": True}
     except Exception as e:
         return {"items": [], "total": 0, "success": False, "error": str(e)}
 
 
 def fetch_support_programs(keywords: list[str], page_size: int = 30) -> list[dict]:
-    """여러 키워드로 지원사업 통합 조회 후 중복 제거"""
-    seen_ids = set()
-    results = []
+    """지원사업목록 + 정책뉴스 통합 조회 후 키워드 필터링"""
+    all_items = []
 
-    for kw in keywords:
-        resp = fetch_bizinfo_list(keyword=kw, page_size=page_size)
-        if resp["success"]:
-            for item in resp["items"]:
-                item_id = item.get("bizId") or item.get("pbanc_rcpt_no") or item.get("title", "")
-                if item_id not in seen_ids:
-                    seen_ids.add(item_id)
-                    results.append(normalize_item(item))
+    # 중소기업지원사업목록 (메인)
+    resp1 = _fetch_odcloud(NAMESPACE_BIZLIST, page_size=page_size)
+    if resp1["success"]:
+        all_items.extend(resp1["items"])
+
+    # 기업마당 정책뉴스 (보조)
+    resp2 = _fetch_odcloud(NAMESPACE_NEWS, page_size=page_size)
+    if resp2["success"]:
+        all_items.extend(resp2["items"])
+
+    if not all_items:
+        return []
+
+    kw_lower = [k.lower() for k in keywords]
+    results = []
+    seen = set()
+
+    for item in all_items:
+        text = " ".join(str(v) for v in item.values()).lower()
+        if not kw_lower or any(k in text for k in kw_lower):
+            normalized = normalize_item(item)
+            if normalized["id"] not in seen:
+                seen.add(normalized["id"])
+                results.append(normalized)
 
     return results
 
 
 def normalize_item(raw: dict) -> dict:
-    """API 응답 필드를 통일된 형식으로 변환"""
+    """odcloud 응답 필드를 통일된 형식으로 변환"""
+    title = (
+        raw.get("제목") or raw.get("title") or
+        raw.get("뉴스제목") or raw.get("정책명") or "제목 없음"
+    )
+    agency = (
+        raw.get("기관명") or raw.get("출처") or
+        raw.get("담당기관") or "중소벤처기업부"
+    )
+    description = (
+        raw.get("내용") or raw.get("요약") or
+        raw.get("본문") or raw.get("summary") or ""
+    )
+    date = (
+        raw.get("등록일") or raw.get("작성일") or
+        raw.get("게시일") or ""
+    )
+    url = (
+        raw.get("url") or raw.get("링크") or
+        raw.get("원문링크") or ""
+    )
+    category = raw.get("분류") or raw.get("카테고리") or "정책뉴스"
+
     return {
-        "id": raw.get("bizId") or raw.get("pbanc_rcpt_no", ""),
-        "title": raw.get("bizNm") or raw.get("title", "제목 없음"),
-        "agency": raw.get("suprtInstNm") or raw.get("creatOrgnztNm", "미확인"),
-        "category": raw.get("bizTpcdNm") or raw.get("bizClsfc", ""),
-        "start_date": raw.get("reqstBgnde") or raw.get("pbancBgngYmd", ""),
-        "end_date": raw.get("reqstEndde") or raw.get("pbancEndYmd", ""),
-        "amount": raw.get("sprtAmt") or raw.get("suprtLmttAmt", ""),
-        "target": raw.get("trgetNm") or raw.get("bsnsSumryCn", ""),
-        "detail_url": raw.get("detailUrl") or raw.get("pbanc_url", ""),
-        "description": raw.get("bizCn") or raw.get("bsnsSumryCn", ""),
+        "id": str(raw.get("번호") or raw.get("id") or title[:20]),
+        "title": title,
+        "agency": agency,
+        "category": category,
+        "start_date": date,
+        "end_date": "",
+        "amount": "",
+        "target": raw.get("지원대상") or "",
+        "detail_url": url,
+        "description": description[:200] if description else "",
         "raw": raw,
     }
 
