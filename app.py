@@ -51,11 +51,11 @@ st.markdown("""
 
 # ── 데이터 로드 (세션 캐시) ──────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_programs(keywords: list[str], use_sample: bool) -> list[dict]:
-    if use_sample:
-        return get_sample_data()
-    data = fetch_support_programs(keywords, page_size=30)
-    return data if data else get_sample_data()
+def load_programs(keywords: list[str]) -> tuple:
+    data = fetch_support_programs(list(keywords), page_size=50)
+    if data:
+        return data, None
+    return [], "공공데이터포털 API 조회에 실패했습니다. 잠시 후 새로고침 해주세요."
 
 
 # ── 사이드바 ─────────────────────────────────────────────────
@@ -87,8 +87,6 @@ with st.sidebar:
         options=["전체", "신탄진", "장항", "천안", "대전"],
     )
 
-    use_sample = st.checkbox("샘플 데이터 사용 (API 미연결 시)", value=True)
-
     if st.button("🔄 데이터 새로고침", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -103,7 +101,7 @@ with st.sidebar:
 
 
 # ── 데이터 로드 ──────────────────────────────────────────────
-programs = load_programs(tuple(selected_kw), use_sample)
+programs, api_error = load_programs(tuple(selected_kw))
 
 # 마감임박 필터
 urgent = [p for p in programs if is_deadline_soon(p)]
@@ -113,36 +111,9 @@ urgent = [p for p in programs if is_deadline_soon(p)]
 # ============================================================
 if page == "🏠 대시보드":
     st.markdown("## 🏠 정부지원사업 대시보드")
-    st.caption(f"조회된 사업 수: **{len(programs)}건** | 마감임박(7일 이내): **{len(urgent)}건**")
 
-    # 요약 지표
-    col1, col2, col3, col4 = st.columns(4)
-    categories = {}
-    for p in programs:
-        cat = p["category"] or "기타"
-        categories[cat] = categories.get(cat, 0) + 1
-
-    col1.metric("전체 공고", f"{len(programs)}건")
-    col2.metric("🔴 마감임박", f"{len(urgent)}건")
-    col3.metric("분야 수", f"{len(categories)}개")
-    col4.metric("조회 키워드", f"{len(selected_kw)}개")
-
-    st.divider()
-
-    # 마감임박 알림
-    if urgent:
-        st.markdown('<div class="section-header">🔴 마감임박 사업</div>', unsafe_allow_html=True)
-        for p in urgent:
-            st.markdown(f"""
-<div class="card urgent">
-  <div class="card-title">{p['title']} <span class="tag urgent">마감임박</span></div>
-  <div class="card-meta">
-    📌 {p['agency']} &nbsp;|&nbsp; 🗓 마감: {p['end_date'] or '미정'} &nbsp;|&nbsp; 💰 {p['amount'] or '금액 미정'}
-  </div>
-  <div class="card-meta" style="margin-top:6px">{p['description'][:120]}...</div>
-</div>
-""", unsafe_allow_html=True)
-        st.divider()
+    if api_error:
+        st.error(api_error)
 
     # 제지산업 관련 포함 키워드 (하나라도 있으면 OK)
     INCLUDE_KW = ["제지", "펄프", "종이", "스마트팩토리", "스마트공장",
@@ -169,6 +140,31 @@ if page == "🏠 대시보드":
 
     biz_all = [p for p in programs if is_paper_related(p)]
     biz_filtered = apply_region(biz_all, selected_region)
+
+    # 요약 지표
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("전체 공고", f"{len(biz_filtered)}건")
+    col2.metric("🔴 마감임박", f"{len([p for p in biz_filtered if is_deadline_soon(p)])}건")
+    col3.metric("분야 수", f"{len(set(p['category'] for p in biz_filtered if p['category']))}개")
+    col4.metric("조회 키워드", f"{len(selected_kw)}개")
+
+    st.divider()
+
+    # 마감임박 알림
+    urgent_filtered = [p for p in biz_filtered if is_deadline_soon(p)]
+    if urgent_filtered:
+        st.markdown('<div class="section-header">🔴 마감임박 사업</div>', unsafe_allow_html=True)
+        for p in urgent_filtered:
+            st.markdown(f"""
+<div class="card urgent">
+  <div class="card-title">{p['title']} <span class="tag urgent">마감임박</span></div>
+  <div class="card-meta">
+    📌 {p['agency']} &nbsp;|&nbsp; 🗓 마감: {p['end_date'] or '미정'} &nbsp;|&nbsp; 💰 {p['amount'] or '금액 미정'}
+  </div>
+  <div class="card-meta" style="margin-top:6px">{p['description'][:120]}...</div>
+</div>
+""", unsafe_allow_html=True)
+        st.divider()
 
     if selected_region != "전체":
         st.info(f"📍 지역 필터: **{selected_region}** — 제목·내용에 지역명 포함된 항목만 표시")
