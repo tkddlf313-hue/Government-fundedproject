@@ -18,7 +18,7 @@ graph TD
     
     subgraph AI & Interaction [추천 및 대화 엔진]
         C -->|Context & Profile Info| D[Gemini Pro API]:::ai
-        D -->|Context-Aware (RAG) Answer| C
+        D -->|Context-Aware RAG Answer| C
     end
     
     C -->|st.session_state| E[즐겨찾기 폴더링 & UI 상태 관리]:::ui
